@@ -7,6 +7,10 @@ const Options = struct {
     allocator: std.mem.Allocator,
 };
 
+const ThreadPoolError = error{
+    Stopped,
+};
+
 pub const ThreadPool = struct {
     stopped: bool,
     threads: []std.Thread,
@@ -50,14 +54,22 @@ pub const ThreadPool = struct {
         node.*.data = task;
 
         self.mutex.lock();
-        self.task_queue.append(node);
-        self.mutex.unlock();
+        defer self.mutex.unlock();
 
+        if (self.stopped) {
+            self.allocator.destroy(node);
+            return ThreadPoolError.Stopped;
+        }
+
+        self.task_queue.append(node);
         self.condition.signal();
     }
 
     pub fn deinit(self: *Self) void {
+        self.mutex.lock();
         self.stopped = true;
+        self.mutex.unlock();
+
         self.condition.broadcast();
 
         for (self.threads) |thread| {
@@ -67,17 +79,20 @@ pub const ThreadPool = struct {
     }
 
     fn worker(self: *Self) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
         while (true) {
-            if (self.stopped) {
-                break;
-            }
-
-            self.mutex.lock();
-            defer self.mutex.unlock();
-
             while (self.task_queue.popFirst()) |unwrapped| {
+                self.mutex.unlock();
+                defer self.mutex.lock();
+
                 unwrapped.data();
                 self.allocator.destroy(unwrapped);
+            }
+
+            if (self.stopped) {
+                break;
             }
 
             self.condition.wait(&self.mutex);
