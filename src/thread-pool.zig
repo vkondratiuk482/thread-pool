@@ -21,9 +21,6 @@ pub const ThreadPool = struct {
 
     const Self = @This();
 
-    // we need to init the pool with undefined
-    // and then call the constructor passing the reference
-    // so that we can pass the pointer to the pool while spawning threads
     pub fn init(options: Options) !*ThreadPool {
         const thread_count = options.threads_count orelse optimalThreadCount();
 
