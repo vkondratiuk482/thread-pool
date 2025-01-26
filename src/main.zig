@@ -1,24 +1,20 @@
 const std = @import("std");
+const ThreadPool = @import("thread-pool.zig").ThreadPool;
 
-pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // don't forget to flush!
+fn log() void {
+    std.debug.print("Hello from the thread\n", .{});
 }
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    var threadPool = try ThreadPool.init(.{ .allocator = allocator, .threads_count = 10 });
+    defer threadPool.deinit();
+
+    try threadPool.spawn(log);
+    try threadPool.spawn(log);
+    try threadPool.spawn(log);
+
+    std.time.sleep(2000 * std.time.ns_per_ms);
 }
